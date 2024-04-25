@@ -2,8 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/jwtauth/v5"
+	"github.com/shuvo-14/api-server/auth"
 	"github.com/shuvo-14/api-server/db"
+	"log"
+
 	"net/http"
 	"strconv"
 )
@@ -173,4 +178,38 @@ func DeleteBook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Can not Write data", http.StatusInternalServerError)
 		return
 	}
+}
+
+func Start(Port int) {
+	db.Init()
+	r := chi.NewRouter()
+	r.Post("/login", auth.Login)
+	r.Post("/logout", auth.LogOut)
+	r.Group(func(chi.Router) {
+		r.Route("/books", func(r chi.Router) {
+			r.Get("/", GetAllBooks)
+			r.Get("/{id}", GetOneBook)
+			r.Group(func(r chi.Router) {
+				// need to add authentication
+				r.Use(jwtauth.Verifier(db.TokenAuth))
+				r.Use(jwtauth.Authenticator(db.TokenAuth))
+
+				r.Post("/", NewBook)
+				r.Put("/{id}", UpdateBook)
+				r.Delete("/{id}", DeleteBook)
+			})
+
+		})
+		r.Route("/authors", func(r chi.Router) {
+			r.Get("/", GetAllAuthors)
+			r.Get("/{id}", GetOneAuthor)
+		})
+	})
+
+	fmt.Printf("Listening and Serving to %v", Port)
+
+	if err := http.ListenAndServe(":"+strconv.Itoa(Port), r); err != nil {
+		log.Fatalln(err)
+	}
+
 }
